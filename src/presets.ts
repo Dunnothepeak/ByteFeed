@@ -18,7 +18,7 @@ export const CS_PRESETS = [
   "Blockchain", "Smart Contracts", "IoT", "Robotics",
   "Deep Learning", "Neural Networks", "Reinforcement Learning", "Generative AI",
   "Transformers", "Computer Animation", "Virtual Reality", "Augmented Reality",
-  "Cryptography", "Public-Key Cryptography", "Hash Functions", "Digital Signatures",
+  "Symmetric-Key Cryptography", "Public-Key Cryptography", "Hash Functions", "Digital Signatures",
   "Malware Analysis", "Penetration Testing", "Firewalls", "Intrusion Detection Systems",
   "Graph Theory", "Linear Algebra", "Calculus", "Probability Theory",
   "Statistics", "Optimization", "Turing Machine", "Complexity Classes",
