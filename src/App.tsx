@@ -5,11 +5,90 @@
 import { useEffect, useState, useRef } from "react";
 import { Loader2, Hash, Sparkles, RefreshCw, Feather, ExternalLink, Heart, MessageCircle, Repeat2 } from "lucide-react";
 
+const ADJECTIVES = ["Cyber", "Quantum", "Tech", "Nerd", "Byte", "Pixel", "Neon", "Void", "Hacker", "Data", "Cloud", "Crypto", "Pseudo", "Agile", "Dev", "Sys", "Net", "Macro", "Micro", "Hyper", "Super", "Giga", "Tera", "Peta", "Nano", "Logic", "Syntax", "Turbo", "Electro", "Binary", "Hex", "Neural", "Digital", "Static", "Dynamic"];
+const NOUNS = ["Ninja", "Wizard", "Guru", "Coder", "Punk", "Junkie", "Bot", "Script", "Stack", "Node", "Flux", "Core", "Hex", "Bit", "Cache", "Bug", "Frame", "Wire", "Hash", "Key", "Proxy", "Server", "Client", "Daemon", "Thread", "Loop", "Array", "String", "Token", "Socket", "Ping", "Port", "Hub", "Switch", "Router"];
+
+function generateUsername() {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const num = Math.floor(Math.random() * 10000);
+  return `@${adj}${noun}${num}`;
+}
+
 interface Note {
   id: string;
-  author: string;
+  username: string;
+  subject: string;
   content: string;
   sourceUrl?: string;
+}
+
+function NoteCard({ note }: { note: Note }) {
+  const [expanded, setExpanded] = useState(false);
+  const maxLength = 220;
+  const shouldClip = note.content.length > maxLength;
+  const displayText = expanded ? note.content : (shouldClip ? note.content.slice(0, maxLength) + '...' : note.content);
+
+  return (
+    <article className="p-4 hover:bg-[var(--color-card)]/30 transition-colors group">
+      <div className="flex gap-3">
+        <div className="flex-shrink-0">
+           <img src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${note.username}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffdfbf,ffd5dc`} alt={note.username} className="w-10 h-10 rounded-full bg-[var(--color-card)] border border-[var(--color-card-border)]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-col mb-1.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-[var(--color-foreground)] truncate hover:underline cursor-pointer">
+                {note.username}
+              </span>
+              <span className="text-[var(--color-muted)] text-sm">
+                · Wikipedia Summary
+              </span>
+            </div>
+            <span className="text-[var(--color-primary)] text-sm font-semibold tracking-tight">
+              Topic: {note.subject}
+            </span>
+          </div>
+          
+          <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+            {displayText}
+            {shouldClip && !expanded && (
+              <button onClick={() => setExpanded(true)} className="text-[#1da1f2] hover:underline ml-1 font-medium">
+                Read more
+              </button>
+            )}
+            {shouldClip && expanded && (
+              <button onClick={() => setExpanded(false)} className="text-[#1da1f2] hover:underline ml-1 font-medium">
+                Show less
+              </button>
+            )}
+          </p>
+
+          {/* Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-3 gap-3">
+            <div className="flex items-center justify-between sm:justify-start gap-10 text-[var(--color-muted)] w-full max-w-sm">
+              <button className="flex items-center gap-2 hover:text-[#1da1f2] transition-colors">
+                <MessageCircle className="w-4 h-4" />
+              </button>
+              <button className="flex items-center gap-2 hover:text-green-400 transition-colors">
+                <Repeat2 className="w-4 h-4" />
+              </button>
+              <button className="flex items-center gap-2 hover:text-pink-400 transition-colors">
+                <Heart className="w-4 h-4" />
+              </button>
+            </div>
+            
+            {note.sourceUrl && (
+              <a href={note.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-[#1da1f2] bg-[#1da1f2]/10 hover:bg-[#1da1f2]/20 px-3 py-1.5 rounded-full transition-colors w-fit whitespace-nowrap hidden group-hover:inline-flex">
+                <ExternalLink className="w-3.5 h-3.5" />
+                Article Link
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 export default function App() {
@@ -22,17 +101,55 @@ export default function App() {
   const fetchFeed = async (interests: string, append = false) => {
     setLoading(true);
     try {
-      const storedTheme = "Software Architecture";
-      const query = encodeURIComponent(interests || storedTheme);
-      const res = await fetch(`/api/feed?interests=${query}`);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
-      if (data.feed) {
-        if (append) {
-          setFeed(prev => [...prev, ...data.feed]);
-        } else {
-          setFeed(data.feed);
+      const interestsStr = (interests || "Computer science").trim();
+      const terms = interestsStr.split(',').map(t => t.trim()).filter(Boolean);
+      const searchQueries = terms.length > 0 ? terms.slice(0, 3) : ["Computer science"];
+      
+      let allNotes: Note[] = [];
+
+      for (const query of searchQueries) {
+        const url = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=5&prop=extracts&exintro=1&explaintext=1&exsentences=3&format=json&origin=*`;
+        
+        try {
+          const wpRes = await fetch(url);
+          if (!wpRes.ok) continue;
+          
+          const wpData = await wpRes.json();
+          if (wpData.query && wpData.query.pages) {
+            const pages = Object.values(wpData.query.pages) as any[];
+            for (const page of pages) {
+              if (page.extract && page.extract.trim().length > 0 && !page.title.startsWith("List of") && !page.title.includes("disambiguation")) {
+                allNotes.push({
+                  id: `wiki-${page.pageid}-${Math.random().toString(36).substring(7)}`,
+                  username: generateUsername(),
+                  subject: page.title,
+                  content: page.extract.trim(),
+                  sourceUrl: `https://en.wikipedia.org/?curid=${page.pageid}`
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Fetch area error", e);
         }
+      }
+
+      if (allNotes.length === 0) {
+        allNotes.push({
+          id: "wiki-fallback-1",
+          username: generateUsername(),
+          subject: "Knowledge Base",
+          content: `We couldn't find specific Wikipedia articles for "${interestsStr}". Try searching for broader terms like "Software Engineering" or "Data Structures".`,
+        });
+      }
+
+      const shuffled = allNotes.sort(() => 0.5 - Math.random());
+      const feedData = shuffled.slice(0, 10);
+
+      if (append) {
+        setFeed(prev => [...prev, ...feedData]);
+      } else {
+        setFeed(feedData);
       }
     } catch (e) {
       console.error(e);
@@ -124,49 +241,7 @@ export default function App() {
           )}
 
           {feed.map((note) => (
-            <article key={note.id} className="p-4 hover:bg-[var(--color-card)]/30 transition-colors cursor-pointer group">
-              <div className="flex gap-3">
-                <div className="flex-shrink-0">
-                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#1da1f2] to-[#8a2be2] flex items-center justify-center text-white font-bold text-lg">
-                      {note.author.charAt(0).toUpperCase()}
-                   </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-bold text-[var(--color-foreground)] truncate hover:underline">
-                      {note.author}
-                    </span>
-                    <span className="text-[var(--color-muted)] text-sm">
-                      · Wikipedia Summary
-                    </span>
-                  </div>
-                  
-                  <p className="text-[15px] leading-relaxed mb-3 whitespace-pre-wrap">
-                    {note.content}
-                  </p>
-
-                  {/* Actions */}
-                  <div className="flex items-center justify-between text-[var(--color-muted)] w-full max-w-md mt-2">
-                    <button className="flex items-center gap-2 group-hover:text-blue-400 transition-colors">
-                      <MessageCircle className="w-4 h-4" />
-                    </button>
-                    <button className="flex items-center gap-2 group-hover:text-green-400 transition-colors">
-                      <Repeat2 className="w-4 h-4" />
-                    </button>
-                    <button className="flex items-center gap-2 group-hover:text-pink-400 transition-colors">
-                      <Heart className="w-4 h-4" />
-                    </button>
-                    {note.sourceUrl ? (
-                      <a href={note.sourceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-[#1da1f2] transition-colors" onClick={(e) => e.stopPropagation()}>
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    ) : (
-                       <div className="w-4"></div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </article>
+            <NoteCard key={note.id} note={note} />
           ))}
           
           {feed.length > 0 && (
@@ -195,7 +270,7 @@ export default function App() {
             Short attention span? No problem. We source concise summaries directly from Wikipedia to deliver complex topics in byte-sized, scrolling notes.
           </p>
           <div className="text-xs text-[var(--color-muted)]/70 pb-2 border-b border-[var(--color-card-border)] mb-4">
-             Update your focus on the left to tune the algorithm.
+             Update your focus on the left to tune your feed.
           </div>
           
           <h3 className="font-bold text-md mb-3 flex flex-row items-center gap-2"><Hash className="w-4 h-4 text-[#1da1f2]"/> Trending Topics</h3>
