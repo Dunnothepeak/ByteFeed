@@ -2,8 +2,9 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useEffect, useState, useRef } from "react";
-import { Loader2, Hash, Sparkles, RefreshCw, Feather, ExternalLink, Heart, MessageCircle, Repeat2 } from "lucide-react";
+import React, { useEffect, useState, useRef } from "react";
+import { Loader2, Hash, Sparkles, RefreshCw, Feather, ExternalLink, Heart, MessageCircle, Repeat2, Tag } from "lucide-react";
+import { CS_PRESETS } from "./presets";
 
 const ADJECTIVES = ["Cyber", "Quantum", "Tech", "Nerd", "Byte", "Pixel", "Neon", "Void", "Hacker", "Data", "Cloud", "Crypto", "Pseudo", "Agile", "Dev", "Sys", "Net", "Macro", "Micro", "Hyper", "Super", "Giga", "Tera", "Peta", "Nano", "Logic", "Syntax", "Turbo", "Electro", "Binary", "Hex", "Neural", "Digital", "Static", "Dynamic"];
 const NOUNS = ["Ninja", "Wizard", "Guru", "Coder", "Punk", "Junkie", "Bot", "Script", "Stack", "Node", "Flux", "Core", "Hex", "Bit", "Cache", "Bug", "Frame", "Wire", "Hash", "Key", "Proxy", "Server", "Client", "Daemon", "Thread", "Loop", "Array", "String", "Token", "Socket", "Ping", "Port", "Hub", "Switch", "Router"];
@@ -21,9 +22,10 @@ interface Note {
   subject: string;
   content: string;
   sourceUrl?: string;
+  imageUrl?: string;
 }
 
-function NoteCard({ note }: { note: Note }) {
+function NoteCard({ note }: { note: Note } & React.Attributes) {
   const [expanded, setExpanded] = useState(false);
   const maxLength = 220;
   const shouldClip = note.content.length > maxLength;
@@ -64,6 +66,12 @@ function NoteCard({ note }: { note: Note }) {
             )}
           </p>
 
+          {note.imageUrl && (
+            <div className="mt-3 rounded-2xl overflow-hidden border border-[var(--color-card-border)] bg-black/5">
+              <img src={note.imageUrl} alt={note.subject} className="w-full max-h-96 object-contain" loading="lazy" />
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-3 gap-3">
             <div className="flex items-center justify-between sm:justify-start gap-10 text-[var(--color-muted)] w-full max-w-sm">
@@ -96,19 +104,38 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [interestInput, setInterestInput] = useState("Computer Engineering, AI, System Design");
   const [currentInterest, setCurrentInterest] = useState("Computer Engineering, AI, System Design");
+  const [pageOffset, setPageOffset] = useState(0);
+  const [suggestedPresets, setSuggestedPresets] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const shuffled = [...CS_PRESETS].sort(() => 0.5 - Math.random());
+    setSuggestedPresets(shuffled.slice(0, 15));
+  }, []);
+
   const fetchFeed = async (interests: string, append = false) => {
+    if (loading) return;
     setLoading(true);
+    
+    const currentOffset = append ? pageOffset + 5 : 0;
+    if (!append) setPageOffset(0);
+    else setPageOffset(currentOffset);
+
     try {
       const interestsStr = (interests || "Computer science").trim();
       const terms = interestsStr.split(',').map(t => t.trim()).filter(Boolean);
-      const searchQueries = terms.length > 0 ? terms.slice(0, 3) : ["Computer science"];
+      
+      // If the user's input is very short, append some random presets so the feed is more diverse
+      if (terms.length < 3) {
+        const randomPresets = [...CS_PRESETS].sort(() => 0.5 - Math.random()).slice(0, 3 - terms.length);
+        terms.push(...randomPresets);
+      }
+      const searchQueries = terms.slice(0, 3);
       
       let allNotes: Note[] = [];
 
       for (const query of searchQueries) {
-        const url = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=5&prop=extracts&exintro=1&explaintext=1&exsentences=3&format=json&origin=*`;
+        const url = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=5&gsroffset=${currentOffset}&prop=extracts|pageimages&exintro=1&explaintext=1&exsentences=3&piprop=original&format=json&origin=*`;
         
         try {
           const wpRes = await fetch(url);
@@ -118,13 +145,20 @@ export default function App() {
           if (wpData.query && wpData.query.pages) {
             const pages = Object.values(wpData.query.pages) as any[];
             for (const page of pages) {
-              if (page.extract && page.extract.trim().length > 0 && !page.title.startsWith("List of") && !page.title.includes("disambiguation")) {
+              if (page.extract && page.extract.trim().length > 0 && !page.title.startsWith("List of") && !page.title.includes("disambiguation") && !page.title.includes("Index of")) {
+                
+                let originalImage: string | undefined;
+                if (page.original && page.original.source) {
+                  originalImage = page.original.source;
+                }
+
                 allNotes.push({
                   id: `wiki-${page.pageid}-${Math.random().toString(36).substring(7)}`,
                   username: generateUsername(),
                   subject: page.title,
                   content: page.extract.trim(),
-                  sourceUrl: `https://en.wikipedia.org/?curid=${page.pageid}`
+                  sourceUrl: `https://en.wikipedia.org/?curid=${page.pageid}`,
+                  imageUrl: originalImage
                 });
               }
             }
@@ -135,6 +169,9 @@ export default function App() {
       }
 
       if (allNotes.length === 0) {
+        // If we found nothing and it's an append, just ignore
+        if (append) return;
+        
         allNotes.push({
           id: "wiki-fallback-1",
           username: generateUsername(),
@@ -147,7 +184,12 @@ export default function App() {
       const feedData = shuffled.slice(0, 10);
 
       if (append) {
-        setFeed(prev => [...prev, ...feedData]);
+        setFeed(prev => {
+          // Filter out duplicates by ID or subject
+          const existingSubjects = new Set(prev.map(p => p.subject));
+          const newUnique = feedData.filter(n => !existingSubjects.has(n.subject));
+          return [...prev, ...newUnique];
+        });
       } else {
         setFeed(feedData);
       }
@@ -160,12 +202,39 @@ export default function App() {
 
   useEffect(() => {
     fetchFeed(currentInterest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentInterest]);
+
+  // Infinite Scroll Listener
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading && feed.length > 0) {
+          fetchFeed(currentInterest, true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (bottomRef.current) {
+      observer.observe(bottomRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [loading, currentInterest, feed.length]);
 
   const handleUpdateInterest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!interestInput.trim()) return;
     setCurrentInterest(interestInput);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const applyPreset = (preset: string) => {
+    setInterestInput(preset);
+    setCurrentInterest(preset);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -197,6 +266,30 @@ export default function App() {
               Tune Feed
             </button>
           </form>
+          
+          <div className="mt-8 px-2">
+            <h2 className="text-[var(--color-muted)] text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-1"><Tag className="w-3 h-3"/> Discover Topics</h2>
+            <div className="flex flex-wrap gap-2">
+              {suggestedPresets.map(preset => (
+                <button
+                  key={preset}
+                  onClick={() => applyPreset(preset)}
+                  className="bg-[var(--color-card)] border border-[var(--color-card-border)] hover:border-[#1da1f2] hover:text-[#1da1f2] text-xs px-3 py-1.5 rounded-full transition-colors"
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+            <button 
+              onClick={() => {
+                const shuffled = [...CS_PRESETS].sort(() => 0.5 - Math.random());
+                setSuggestedPresets(shuffled.slice(0, 15));
+              }}
+              className="text-[#1da1f2] hover:underline text-xs font-medium mt-3 flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3"/> Shuffle presets
+            </button>
+          </div>
         </div>
       </div>
 
@@ -227,9 +320,9 @@ export default function App() {
         </div>
 
         {/* Feed Header */}
-        <div className="hidden sm:flex border-b border-[var(--color-card-border)] px-4 py-4 sticky top-0 bg-[var(--color-background)]/90 backdrop-blur-md z-10 justify-between items-center cursor-pointer" onClick={() => window.scrollTo(0, 0)}>
+        <div className="hidden sm:flex border-b border-[var(--color-card-border)] px-4 py-4 sticky top-0 bg-[var(--color-background)]/90 backdrop-blur-md z-10 justify-between items-center cursor-pointer" onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}>
           <h1 className="text-xl font-bold">Latest Byte</h1>
-          {loading && <Loader2 className="w-5 h-5 animate-spin text-[#1da1f2]" />}
+          {loading && feed.length === 0 && <Loader2 className="w-5 h-5 animate-spin text-[#1da1f2]" />}
         </div>
 
         {/* Feed Content */}
@@ -247,16 +340,13 @@ export default function App() {
           {feed.length > 0 && (
             <div 
               ref={bottomRef} 
-              className="p-6 flex justify-center border-t-0"
+              className="p-6 flex justify-center border-t border-[var(--color-card-border)] min-h-[100px]"
             >
-              <button 
-                onClick={() => fetchFeed(currentInterest, true)}
-                disabled={loading}
-                className="flex items-center gap-2 text-[#1da1f2] hover:bg-[#1da1f2]/10 px-4 py-2 rounded-full transition-colors font-medium cursor-pointer disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                Load More Bytes
-              </button>
+              {loading ? (
+                <Loader2 className="w-6 h-6 animate-spin text-[#1da1f2]" />
+              ) : (
+                <div className="text-[var(--color-muted)] text-sm">Scroll for more...</div>
+              )}
             </div>
           )}
         </div>
