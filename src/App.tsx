@@ -493,7 +493,7 @@ export default function App() {
       {/* Sidebar - Desktop */}
       <div className="hidden sm:flex flex-col w-64 border-r border-[var(--color-card-border)] h-screen sticky top-0 px-4 py-8">
         <div className="flex items-center gap-3 text-xl font-bold mb-8text-[var(--color-primary)] px-2">
-          <img src="/logo.jpg" alt="ByteFeed Logo" className="w-8 h-8 rounded-md object-cover" />
+          <img src="https://i.ibb.co/RL1K6TB/Picsart-26-05-24-20-30-01-367.jpg" alt="ByteFeed Logo" className="w-8 h-8 rounded-md object-cover" />
           <span>ByteFeed</span>
         </div>
         
@@ -551,7 +551,7 @@ export default function App() {
           <>
             {/* Mobile Header */}
             <div className="sm:hidden sticky top-0 bg-[var(--color-background)]/90 backdrop-blur-md z-10 border-b border-[var(--color-card-border)] px-4 py-3 flex justify-between items-center">
-               <img src="/logo.jpg" alt="ByteFeed Logo" className="w-6 h-6 rounded-md object-cover" />
+               <img src="https://i.ibb.co/RL1K6TB/Picsart-26-05-24-20-30-01-367.jpg" alt="ByteFeed Logo" className="w-6 h-6 rounded-md object-cover" />
                <span className="font-bold">ByteFeed</span>
                <div className="w-6"></div> {/* spacer */}
             </div>
