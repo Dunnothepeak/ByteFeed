@@ -3,13 +3,13 @@
   "name": "ByteFeed Wiki Reader",
   "icons": [
     {
-      "src": "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=ByteFeed&backgroundColor=1da1f2",
-      "type": "image/svg+xml",
+      "src": "/logo.jpg",
+      "type": "image/jpeg",
       "sizes": "192x192"
     },
     {
-      "src": "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=ByteFeed&backgroundColor=1da1f2",
-      "type": "image/svg+xml",
+      "src": "/logo.jpg",
+      "type": "image/jpeg",
       "sizes": "512x512"
     }
   ],
