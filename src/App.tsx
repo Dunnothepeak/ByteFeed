@@ -72,16 +72,74 @@ function FullArticleView({ note, onClose }: { note: Note, onClose: () => void })
         return;
       }
       try {
-         const title = encodeURIComponent(note.subject.replace(/ /g, '_'));
-         const url = `https://en.wikipedia.org/api/rest_v1/page/mobile-sections/${title}`;
+         const url = `https://en.wikipedia.org/w/api.php?action=parse&pageid=${note.pageId}&prop=text&format=json&origin=*&disableeditsection=1&mobileformat=1`;
          const res = await fetch(url);
-         if (!res.ok) throw new Error("Failed to fetch article from Wikipedia REST API");
+         if (!res.ok) throw new Error("Failed to fetch article from Wikipedia Action API");
          const data = await res.json();
          
-         setLeadContent(data.lead.sections[0].text);
-         if (data.remaining && data.remaining.sections) {
-           setSections(data.remaining.sections);
+         const html = data.parse?.text?.["*"] || "";
+         const parser = new DOMParser();
+         const doc = parser.parseFromString(html, "text/html");
+         
+         const outputDiv = doc.querySelector('.mw-parser-output');
+         const rootChildren = outputDiv ? Array.from(outputDiv.children) : Array.from(doc.body.children);
+         
+         let currentSectionText: Element[] = [];
+         let sectionsArr: WikiSection[] = [];
+         let currentHeading: Element | null = null;
+         let sectionId = 1;
+         let initialLead = "";
+         
+         for (const child of rootChildren) {
+           // Skip Table of Contents and Navboxes
+           if (child.id === 'toc' || child.classList.contains('toc') || child.classList.contains('navbox')) {
+              continue;
+           }
+           
+           // In new Wikipedia output, headings might be wrapped in mw-heading div
+           const isHeading2 = child.tagName === 'H2' || (child.tagName === 'DIV' && child.classList.contains('mw-heading2'));
+           
+           if (isHeading2) {
+              if (!currentHeading) {
+                 initialLead = currentSectionText.map(el => el.outerHTML).join('');
+              } else {
+                 const headline = currentHeading.tagName === 'H2' ? currentHeading : currentHeading.querySelector('h2');
+                 const titleSpan = headline?.querySelector('.mw-headline');
+                 let title = titleSpan ? titleSpan.innerHTML : (headline?.textContent || "Section");
+                 
+                 sectionsArr.push({
+                    id: sectionId++,
+                    line: title,
+                    text: currentSectionText.map(el => el.outerHTML).join(''),
+                    toclevel: 1,
+                    anchor: headline?.id || ''
+                 });
+              }
+              currentHeading = child;
+              currentSectionText = [];
+           } else {
+              currentSectionText.push(child);
+           }
          }
+         
+         if (currentHeading) {
+            const headline = currentHeading.tagName === 'H2' ? currentHeading : currentHeading.querySelector('h2');
+            const titleSpan = headline?.querySelector('.mw-headline');
+            let title = titleSpan ? titleSpan.innerHTML : (headline?.textContent || "Section");
+            
+            sectionsArr.push({
+               id: sectionId++,
+               line: title,
+               text: currentSectionText.map(el => el.outerHTML).join(''),
+               toclevel: 1,
+               anchor: headline?.id || ''
+            });
+         } else if (!currentHeading && currentSectionText.length > 0) {
+            initialLead = currentSectionText.map(el => el.outerHTML).join('');
+         }
+         
+         setLeadContent(initialLead);
+         setSections(sectionsArr);
       } catch (e) {
          console.error(e);
          setLeadContent(`<p>${note.content}</p><br/><p><i>(Failed to load full rich article)</i></p>`);
