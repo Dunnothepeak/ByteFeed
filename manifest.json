@@ -1,0 +1,21 @@
+{
+  "short_name": "ByteFeed",
+  "name": "ByteFeed Wiki Reader",
+  "icons": [
+    {
+      "src": "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=ByteFeed&backgroundColor=1da1f2",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=ByteFeed&backgroundColor=1da1f2",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "orientation": "portrait"
+}
