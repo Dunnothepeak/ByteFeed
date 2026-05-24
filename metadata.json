@@ -1,0 +1,6 @@
+{
+  "name": "ByteFeed",
+  "description": "An AI-generated, concise scrolling feed tailored for computer engineering notes and facts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
