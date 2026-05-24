@@ -57,4 +57,25 @@ body {
 .wiki-content ul { list-style-type: disc; }
 .wiki-content ol { list-style-type: decimal; }
 
+/* Small text and captions */
+.wiki-content small,
+.wiki-content .thumbcaption,
+.wiki-content figcaption,
+.wiki-content .infobox,
+.wiki-content .reference,
+.wiki-content sup,
+.wiki-content sub,
+.wiki-content .mw-editsection,
+.wiki-content .hatnote {
+  font-size: 0.8em;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+.wiki-content .thumbcaption,
+.wiki-content figcaption {
+  margin-top: 0.25rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+
 
