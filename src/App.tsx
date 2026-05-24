@@ -57,10 +57,11 @@ function CollapsibleSection({ section, isFirst }: { section: WikiSection, isFirs
   );
 }
 
-function FullArticleView({ note, onClose }: { note: Note, onClose: () => void }) {
+function FullArticleView({ note, onClose, onOpenArticle }: { note: Note, onClose: () => void, onOpenArticle: (note: Note) => void }) {
   const [leadContent, setLeadContent] = useState("");
   const [sections, setSections] = useState<WikiSection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [linkLoading, setLinkLoading] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -151,14 +152,47 @@ function FullArticleView({ note, onClose }: { note: Note, onClose: () => void })
     fetchFullArticle();
   }, [note]);
 
-  const handleContentClick = (e: React.MouseEvent) => {
+  const handleContentClick = async (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     const link = target.closest('a');
     if (link) {
        e.preventDefault();
        const href = link.getAttribute('href');
        if (href && href.startsWith('/wiki/')) {
-          window.open(`https://en.wikipedia.org${href}`, '_blank');
+          const titlePart = href.replace('/wiki/', '');
+          if (titlePart.includes(':') && !titlePart.startsWith('Help:')) {
+             window.open(`https://en.wikipedia.org${href}`, '_blank');
+             return;
+          }
+          
+          setLinkLoading(true);
+          try {
+             const title = decodeURIComponent(titlePart);
+             const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+             if (res.ok) {
+                const data = await res.json();
+                if (data.pageid) {
+                   onOpenArticle({
+                      id: Date.now().toString(),
+                      username: "WikiLink",
+                      subject: data.title,
+                      content: data.extract,
+                      sourceUrl: `https://en.wikipedia.org/?curid=${data.pageid}`,
+                      imageUrl: data.originalimage?.source,
+                      pageId: data.pageid
+                   });
+                } else {
+                   window.open(`https://en.wikipedia.org${href}`, '_blank');
+                }
+             } else {
+                window.open(`https://en.wikipedia.org${href}`, '_blank');
+             }
+          } catch (err) {
+             console.error(err);
+             window.open(`https://en.wikipedia.org${href}`, '_blank');
+          } finally {
+             setLinkLoading(false);
+          }
        } else if (href && !href.startsWith('#')) {
           window.open(href, '_blank');
        }
@@ -166,7 +200,14 @@ function FullArticleView({ note, onClose }: { note: Note, onClose: () => void })
   };
 
   return (
-    <div className="w-full bg-[var(--color-background)] min-h-screen">
+    <div className="w-full bg-[var(--color-background)] min-h-screen relative">
+      {linkLoading && (
+        <div className="fixed inset-0 bg-[var(--color-background)]/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-[var(--color-card)] p-4 rounded-full shadow-lg border border-[var(--color-card-border)]">
+             <Loader2 className="w-8 h-8 animate-spin text-[#1da1f2]" />
+          </div>
+        </div>
+      )}
       <div className="sticky top-0 bg-[var(--color-background)]/90 backdrop-blur-md z-10 border-b border-[var(--color-card-border)] px-4 py-3 flex items-center gap-4">
          <button onClick={onClose} className="p-2 hover:bg-[var(--color-card)] rounded-full transition-colors cursor-pointer">
             <ArrowLeft className="w-5 h-5" />
@@ -505,7 +546,7 @@ export default function App() {
       <main className="w-full max-w-2xl border-x border-[var(--color-card-border)] min-h-screen pb-20 sm:pb-0 bg-[var(--color-background)] z-0 relative">
         
         {activeNote ? (
-          <FullArticleView note={activeNote} onClose={() => setActiveNote(null)} />
+          <FullArticleView note={activeNote} onClose={() => setActiveNote(null)} onOpenArticle={setActiveNote} />
         ) : (
           <>
             {/* Mobile Header */}
