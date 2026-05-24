@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import React, { useEffect, useState, useRef } from "react";
-import { Loader2, Hash, Sparkles, RefreshCw, Feather, ExternalLink, Heart, MessageCircle, Repeat2, Tag, ArrowLeft, BookOpen } from "lucide-react";
+import { Loader2, Hash, Sparkles, RefreshCw, Feather, ExternalLink, Heart, MessageCircle, Repeat2, Tag, ArrowLeft, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { CS_PRESETS } from "./presets";
 
 const ADJECTIVES = ["Cyber", "Quantum", "Tech", "Nerd", "Byte", "Pixel", "Neon", "Void", "Hacker", "Data", "Cloud", "Crypto", "Pseudo", "Agile", "Dev", "Sys", "Net", "Macro", "Micro", "Hyper", "Super", "Giga", "Tera", "Peta", "Nano", "Logic", "Syntax", "Turbo", "Electro", "Binary", "Hex", "Neural", "Digital", "Static", "Dynamic"];
@@ -26,8 +26,40 @@ interface Note {
   pageId?: number;
 }
 
+interface WikiSection {
+  id: number;
+  toclevel: number;
+  line: string;
+  text: string;
+  anchor: string;
+}
+
+function CollapsibleSection({ section, isFirst }: { section: WikiSection, isFirst: boolean } & React.Attributes) {
+  const [isOpen, setIsOpen] = useState(isFirst);
+  
+  return (
+    <div className={`py-4 ${section.toclevel > 1 ? 'ml-4 lg:ml-6 border-t border-[var(--color-card-border)]/50' : 'border-t border-[var(--color-card-border)]'}`}>
+      <button 
+        onClick={() => setIsOpen(!isOpen)} 
+        className="flex items-center justify-between w-full text-left font-bold text-lg hover:text-[#1da1f2] transition-colors"
+      >
+        <span dangerouslySetInnerHTML={{ __html: section.line }} />
+        {isOpen ? <ChevronUp className="w-5 h-5 flex-shrink-0 opacity-75" /> : <ChevronDown className="w-5 h-5 flex-shrink-0 opacity-75" />}
+      </button>
+      
+      {isOpen && section.text && (
+        <div 
+           className="mt-4 wiki-content text-[16px] leading-8 text-[var(--color-foreground)]/90 overflow-x-hidden" 
+           dangerouslySetInnerHTML={{ __html: section.text }} 
+        />
+      )}
+    </div>
+  );
+}
+
 function FullArticleView({ note, onClose }: { note: Note, onClose: () => void }) {
-  const [fullContent, setFullContent] = useState("");
+  const [leadContent, setLeadContent] = useState("");
+  const [sections, setSections] = useState<WikiSection[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,25 +67,45 @@ function FullArticleView({ note, onClose }: { note: Note, onClose: () => void })
     const fetchFullArticle = async () => {
       setLoading(true);
       if (!note.pageId) {
-        setFullContent(note.content);
+        setLeadContent(`<p>${note.content}</p>`);
         setLoading(false);
         return;
       }
       try {
-         const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&pageids=${note.pageId}&explaintext=1&format=json&origin=*`;
+         const title = encodeURIComponent(note.subject.replace(/ /g, '_'));
+         const url = `https://en.wikipedia.org/api/rest_v1/page/mobile-sections/${title}`;
          const res = await fetch(url);
+         if (!res.ok) throw new Error("Failed to fetch article from Wikipedia REST API");
          const data = await res.json();
-         const extract = data.query.pages[note.pageId]?.extract;
-         setFullContent(extract || note.content);
+         
+         setLeadContent(data.lead.sections[0].text);
+         if (data.remaining && data.remaining.sections) {
+           setSections(data.remaining.sections);
+         }
       } catch (e) {
          console.error(e);
-         setFullContent(note.content + "\n\n(Failed to load full article)");
+         setLeadContent(`<p>${note.content}</p><br/><p><i>(Failed to load full rich article)</i></p>`);
+         setSections([]);
       } finally {
          setLoading(false);
       }
     };
     fetchFullArticle();
   }, [note]);
+
+  const handleContentClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const link = target.closest('a');
+    if (link) {
+       e.preventDefault();
+       const href = link.getAttribute('href');
+       if (href && href.startsWith('/wiki/')) {
+          window.open(`https://en.wikipedia.org${href}`, '_blank');
+       } else if (href && !href.startsWith('#')) {
+          window.open(href, '_blank');
+       }
+    }
+  };
 
   return (
     <div className="w-full bg-[var(--color-background)] min-h-screen">
@@ -63,7 +115,7 @@ function FullArticleView({ note, onClose }: { note: Note, onClose: () => void })
          </button>
          <span className="font-bold text-xl truncate">Article</span>
       </div>
-      <div className="p-6">
+      <div className="p-6" onClick={handleContentClick}>
          <div className="flex items-center gap-3 mb-6">
             <div className="flex-shrink-0">
                <img src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${note.username}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffdfbf,ffd5dc`} alt={note.username} className="w-12 h-12 rounded-full border border-[var(--color-card-border)] bg-[var(--color-card)]" />
@@ -87,9 +139,23 @@ function FullArticleView({ note, onClose }: { note: Note, onClose: () => void })
          {loading ? (
            <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-[#1da1f2]" /></div>
          ) : (
-           <div className="text-[16px] leading-8 whitespace-pre-wrap text-[var(--color-foreground)]/90">
-             {fullContent}
-           </div>
+           <>
+             <div 
+               className="wiki-content text-[16px] leading-8 text-[var(--color-foreground)]/90 mb-8"
+               dangerouslySetInnerHTML={{ __html: leadContent }}
+             />
+             
+             {sections.length > 0 && (
+               <div className="mt-8">
+                 <h2 className="text-[var(--color-muted)] text-sm font-semibold uppercase tracking-wider mb-2">Sections</h2>
+                 <div className="flex flex-col">
+                   {sections.map((section, index) => (
+                      <CollapsibleSection key={section.id} section={section} isFirst={index === 0} />
+                   ))}
+                 </div>
+               </div>
+             )}
+           </>
          )}
          
          {!loading && note.sourceUrl && (
